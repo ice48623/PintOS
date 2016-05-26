@@ -123,7 +123,7 @@ timer_sleep (int64_t ticks)
   //   thread_yield ();
   thread_current()->tick_to_sleep = ticks;
   enum intr_level old_level = intr_disable();
-  list_push_front(&sleep_list, &t->allelem);
+  // list_push_front(&sleep_list, &t->allelem);
   // list_insert(&sleep_list, &t->allelem);
   thread_block();
 
@@ -223,7 +223,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  thread_eachsleep(wakeup_threads,0);
+  thread_foreach(wakeup_threads,0);
 
 }
 
