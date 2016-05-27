@@ -31,21 +31,27 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+
 static struct list sleep_list;
+list_less_func *compare_sleep(const struct list_elem *, const struct list_elem *, void *);
 
 static void
 wakeup_threads(struct thread *t, void *aux)
 {
- if(t->status == THREAD_BLOCKED)
+ if(t->status == THREAD_BLOCKED && !list_empty(&sleep_list))
  {
   if(t->tick_to_sleep > 0)
   {
    t->tick_to_sleep--;
    if(t->tick_to_sleep == 0)
    {
-    thread_unblock(t);
+    //  ASSERT(t->status == THREAD_BLOCKED);
+    //  list_pop_front(&sleep_list);
+     thread_unblock(t);
+
    }
   }
+
   // else if(t->tick_to_sleep < 0)
   // {
   //   t->tick_to_sleep++;
@@ -54,6 +60,20 @@ wakeup_threads(struct thread *t, void *aux)
  }
 }
 
+list_less_func *
+compare_sleep(const struct list_elem *a, const struct list_elem *b, void *aux){
+  struct thread *t_a = list_entry(a, struct thread, elem);
+  struct thread *t_b = list_entry(b, struct thread, elem);
+
+  int64_t a_ticks = (t_a -> ticks) - timer_elapsed(t_a -> start);
+  int64_t b_ticks = (t_b -> ticks) - timer_elapsed(t_b -> start);
+
+  if(a_ticks < b_ticks)
+    return true;
+  else
+    return false;
+
+}
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -115,19 +135,25 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks)
 {
+
   int64_t start = timer_ticks ();
 
   struct thread *t = thread_current();
-  ASSERT (intr_get_level () == INTR_ON);
-  // while (timer_elapsed (start) < ticks)
-  //   thread_yield ();
-  thread_current()->tick_to_sleep = ticks;
-  enum intr_level old_level = intr_disable();
-  // list_push_front(&sleep_list, &t->allelem);
-  // list_insert(&sleep_list, &t->allelem);
-  thread_block();
 
-  intr_set_level(old_level);
+  if (ticks > 0){
+    ASSERT (intr_get_level () == INTR_ON);
+    // while (timer_elapsed (start) < ticks)
+    //   thread_yield ();
+    thread_current()->tick_to_sleep = ticks;
+    enum intr_level old_level = intr_disable();
+    // t->start = start;
+    // t->ticks = ticks;
+    // list_push_front(&sleep_list, &t->allelem);
+    list_insert_ordered(&sleep_list, &t->allelem, compare_sleep, NULL);
+    thread_block();
+
+    intr_set_level(old_level);
+  }
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -221,9 +247,16 @@ thread_eachsleep (thread_action_func *func, void *aux)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+
+
   ticks++;
   thread_tick ();
-  thread_foreach(wakeup_threads,0);
+  if (!list_empty(&sleep_list)){
+    thread_foreach(wakeup_threads,0);
+    // wakeup_threads;
+  }
+  // thread_foreach(wakeup_threads,0);
+
 
 }
 
