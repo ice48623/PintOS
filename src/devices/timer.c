@@ -38,7 +38,7 @@ list_less_func *compare_sleep(const struct list_elem *, const struct list_elem *
 static void
 wakeup_threads(struct thread *t, void *aux)
 {
- if(t->status == THREAD_BLOCKED && !list_empty(&sleep_list))
+ if(t->status == THREAD_BLOCKED)
  {
   if(t->tick_to_sleep > 0)
   {
@@ -60,20 +60,20 @@ wakeup_threads(struct thread *t, void *aux)
  }
 }
 
-list_less_func *
-compare_sleep(const struct list_elem *a, const struct list_elem *b, void *aux){
-  struct thread *t_a = list_entry(a, struct thread, elem);
-  struct thread *t_b = list_entry(b, struct thread, elem);
-
-  int64_t a_ticks = (t_a -> ticks) - timer_elapsed(t_a -> start);
-  int64_t b_ticks = (t_b -> ticks) - timer_elapsed(t_b -> start);
-
-  if(a_ticks < b_ticks)
-    return true;
-  else
-    return false;
-
-}
+// list_less_func *
+// compare_sleep(const struct list_elem *a, const struct list_elem *b, void *aux){
+//   struct thread *t_a = list_entry(a, struct thread, elem);
+//   struct thread *t_b = list_entry(b, struct thread, elem);
+//
+//   int64_t a_ticks = (t_a -> ticks) - timer_elapsed(t_a -> start);
+//   int64_t b_ticks = (t_b -> ticks) - timer_elapsed(t_b -> start);
+//
+//   if(a_ticks < b_ticks)
+//     return true;
+//   else
+//     return false;
+//
+// }
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -149,7 +149,7 @@ timer_sleep (int64_t ticks)
     // t->start = start;
     // t->ticks = ticks;
     // list_push_front(&sleep_list, &t->allelem);
-    list_insert_ordered(&sleep_list, &t->allelem, compare_sleep, NULL);
+    // list_insert_ordered(&sleep_list, &t->allelem, compare_sleep, NULL);
     thread_block();
 
     intr_set_level(old_level);
@@ -227,20 +227,20 @@ timer_print_stats (void)
 }
 
 // Iterate to all threads in sleep list.
-void
-thread_eachsleep (thread_action_func *func, void *aux)
-{
-  struct list_elem *e;
-
-  ASSERT (intr_get_level () == INTR_OFF);
-
-  for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
-       e = list_next (e))
-    {
-      struct thread *t = list_entry (e, struct thread, allelem);
-      func (t, aux);
-    }
-}
+// void
+// thread_eachsleep (thread_action_func *func, void *aux)
+// {
+//   struct list_elem *e;
+//
+//   ASSERT (intr_get_level () == INTR_OFF);
+//
+//   for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
+//        e = list_next (e))
+//     {
+//       struct thread *t = list_entry (e, struct thread, allelem);
+//       func (t, aux);
+//     }
+// }
 
 
 /* Timer interrupt handler. */
@@ -251,11 +251,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   ticks++;
   thread_tick ();
-  if (!list_empty(&sleep_list)){
-    thread_foreach(wakeup_threads,0);
-    // wakeup_threads;
-  }
-  // thread_foreach(wakeup_threads,0);
+  // if (!list_empty(&sleep_list)){
+  //   thread_foreach(wakeup_threads,0);
+  //   // wakeup_threads;
+  // }
+  thread_foreach(wakeup_threads,0);
 
 
 }
