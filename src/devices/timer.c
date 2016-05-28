@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/fixed-point.h"
 // #include "threads/thread.c"
 
 /* See [8254] for hardware details of the 8254 timer chip. */
@@ -242,6 +243,23 @@ timer_print_stats (void)
 //     }
 // }
 
+// set priority for each thread
+void set_priority (struct thread *t){
+
+  int rec_cpu = t -> recent_cpu;
+  int nice = t -> nice_value;
+
+  rec_cpu = CONVERT_TO_FIXED_POINT(rec_cpu);
+  nice = CONVERT_TO_FIXED_POINT(nice);
+
+  int prio = 0;
+  prio = CONVERT_TO_FIXED_POINT(prio);
+
+  prio = PRI_MAX - DIVIDE(rec_cpu,4) - MULT(nice,2);
+  prio = CONVERT_TO_INT(prio);
+
+  t -> priority = prio;
+}
 
 /* Timer interrupt handler. */
 static void
@@ -257,7 +275,21 @@ timer_interrupt (struct intr_frame *args UNUSED)
   // }
   thread_foreach(wakeup_threads,0);
 
-
+  // update recent cpu value for running thread
+  // recalculate priority for each
+//   if ( ticks%4 == 0)
+//   {
+//     thread_current() -> recent_cpu += 4;
+//     thread_foreach(set_priority,0);
+//   }
+//
+//   // update load avg and recent cpu
+//   if ( timer_ticks () % TIMER_FREQ == 0 )
+//   {
+//     thread_get_load_avg();
+//     thread_foreach(thread_get_recent_cpu, 0);
+//   }
+//
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

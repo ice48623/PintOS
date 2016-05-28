@@ -11,10 +11,13 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed-point.h"
 // #include "devices/timer.c"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+
+static int load_avg = 0;
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -104,6 +107,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread -> recent_cpu = 0;
+  initial_thread -> nice_value = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -416,6 +421,8 @@ void
 thread_set_nice (int nice UNUSED)
 {
   /* Not yet implemented. */
+  thread_current() -> nice_value = nice;
+
 }
 
 /* Returns the current thread's nice value. */
@@ -423,7 +430,8 @@ int
 thread_get_nice (void)
 {
   /* Not yet implemented. */
-  return 0;
+
+  return thread_current() -> nice_value;
 }
 
 /* Returns 100 times the system load average. */
@@ -431,7 +439,14 @@ int
 thread_get_load_avg (void)
 {
   /* Not yet implemented. */
-  return 0;
+  size_t ready_threads = list_size(&ready_list) + 1;
+  ready_threads = (int)ready_threads; 
+  ready_threads = CONVERT_TO_FIXED_POINT(ready_threads);
+  load_avg = CONVERT_TO_FIXED_POINT(load_avg);
+  load_avg = MULT( DIVIDE(59,60), load_avg ) + MULT( DIVIDE(1,60), ready_threads );
+  load_avg = CONVERT_TO_INT(load_avg);
+
+  return load_avg * 100;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -439,7 +454,17 @@ int
 thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
-  return 0;
+  int nice = thread_current() -> nice_value;
+  int rec_cpu = thread_current() -> recent_cpu;
+
+  // convert to fixed point
+  nice = CONVERT_TO_FIXED_POINT(nice);
+  rec_cpu = CONVERT_TO_FIXED_POINT(rec_cpu);
+
+  rec_cpu = MULT( DIVIDE( MULT(2,load_avg), MULT(2,load_avg) + 1 ), rec_cpu ) + nice;
+  rec_cpu = CONVERT_TO_INT(rec_cpu);
+  thread_current() -> recent_cpu = rec_cpu;
+  return rec_cpu * 100;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
