@@ -77,6 +77,11 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+list_less_func *
+compare_priority(const struct list_elem *a,
+                 const struct list_elem *b,
+                 void *aux);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -218,6 +223,11 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if (t->priority >= running_thread()->priority)
+  {
+    thread_yield();
+  }
+
   return tid;
 }
 
@@ -254,7 +264,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, (list_less_func *) compare_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -325,7 +336,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_push_back (&ready_list, &cur->elem);
+    // list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, (list_less_func *) compare_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -395,11 +407,8 @@ thread_get_nice (void)
   return thread_current() -> nice_value;
 }
 
-/* Returns 100 times the system load average. */
-int
-thread_get_load_avg (void)
+void cal_load_avg(void)
 {
-  /* Not yet implemented. */
   size_t ready_threads = list_size(&ready_list);
   
   if (thread_current() != idle_thread){
@@ -408,7 +417,7 @@ thread_get_load_avg (void)
   }
 
   printf("ready thread = %d\n", ready_threads);
-  printf("load_avg before = %f\n", load_avg);
+  printf("load_avg before = %d\n", load_avg);
 
   int t1 = MULT_FIX( DIV_FIX(CONVERT_TO_FIX(59),CONVERT_TO_FIX(60)), load_avg);
   int t2 = MULT_MIX( DIV_FIX(CONVERT_TO_FIX(1),CONVERT_TO_FIX(60)), ready_threads);
@@ -416,9 +425,45 @@ thread_get_load_avg (void)
 
   printf("t1 = %d\n", t1);
   printf("t2 = %d\n", t2);
-  printf("load_avg after = %f\n", load_avg);
+  printf("load_avg after = %d\n", load_avg);
+}
+
+/* Returns 100 times the system load average. */
+int
+thread_get_load_avg (void)
+{
+  /* Not yet implemented. */
+  // size_t ready_threads = list_size(&ready_list);
+  
+  // if (thread_current() != idle_thread){
+  //   printf("is not idle thread\n");
+  //   ready_threads++;
+  // }
+
+  // printf("ready thread = %d\n", ready_threads);
+  // printf("load_avg before = %d\n", load_avg);
+
+  // int t1 = MULT_FIX( DIV_FIX(CONVERT_TO_FIX(59),CONVERT_TO_FIX(60)), load_avg);
+  // int t2 = MULT_MIX( DIV_FIX(CONVERT_TO_FIX(1),CONVERT_TO_FIX(60)), ready_threads);
+  // load_avg = ADD_FIX(t1,t2);
+
+  // printf("t1 = %d\n", t1);
+  // printf("t2 = %d\n", t2);
+  // printf("load_avg after = %d\n", load_avg);
 
   return ROUND_TO_NEAREST(MULT_MIX(load_avg, 100));
+}
+
+void cal_rec_cpu(struct thread *t, void *aux)
+{
+  int nice = t -> nice_value; // int
+  int rec_cpu = t -> recent_cpu; // real num (fix point)
+
+  int t1 = MULT_MIX(load_avg,2);
+  int t2 = DIV_FIX( t1, ADD_MIX(t1,1));
+
+  rec_cpu = ADD_MIX( MULT_FIX(t2, rec_cpu), nice );
+  t -> recent_cpu = rec_cpu;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -427,14 +472,14 @@ thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
 
-  int nice = thread_current() -> nice_value; // int
+  // int nice = thread_current() -> nice_value; // int
   int rec_cpu = thread_current() -> recent_cpu; // real num (fix point)
 
-  int t1 = MULT_MIX(load_avg,2);
-  int t2 = DIV_FIX( t1, ADD_MIX(t1,1));
+  // int t1 = MULT_MIX(load_avg,2);
+  // int t2 = DIV_FIX( t1, ADD_MIX(t1,1));
 
-  rec_cpu = ADD_MIX( MULT_FIX(t2, rec_cpu), nice );
-  thread_current() -> recent_cpu = rec_cpu;
+  // rec_cpu = ADD_MIX( MULT_FIX(t2, rec_cpu), nice );
+  // thread_current() -> recent_cpu = rec_cpu;
 
   return ROUND_TO_NEAREST( MULT_MIX(rec_cpu,100) );
 
@@ -552,7 +597,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return list_entry (list_pop_back (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -641,3 +686,16 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+list_less_func *
+compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct thread *t_a = list_entry(a, struct thread, elem);
+  struct thread *t_b = list_entry(b, struct thread, elem);
+
+  if(t_a -> priority < t_b -> priority)
+  {
+    return true;
+  }
+  return false;
+}

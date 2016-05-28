@@ -31,6 +31,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+static void wakeup_threads(struct thread *t, void *aux);
 
 static struct list sleep_list;
 
@@ -113,7 +114,7 @@ timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
 
-  struct thread *t = thread_current();
+  // struct thread *t = thread_current();
   if (ticks > 0)
   {
     ASSERT (intr_get_level () == INTR_ON);
@@ -201,20 +202,20 @@ timer_print_stats (void)
 }
 
 // Iterate to all threads in sleep list.
-void
-thread_eachsleep (thread_action_func *func, void *aux)
-{
-  struct list_elem *e;
+// void
+// thread_eachsleep (thread_action_func *func, void *aux)
+// {
+//   struct list_elem *e;
 
-  ASSERT (intr_get_level () == INTR_OFF);
+//   ASSERT (intr_get_level () == INTR_OFF);
 
-  for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
-       e = list_next (e))
-    {
-      struct thread *t = list_entry (e, struct thread, allelem);
-      func (t, aux);
-    }
-}
+//   for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
+//        e = list_next (e))
+//     {
+//       struct thread *t = list_entry (e, struct thread, allelem);
+//       func (t, aux);
+//     }
+// }
 
 // set priority for each thread
 void set_priority (struct thread *t, void *aux){
@@ -250,8 +251,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
   // update load avg and recent cpu
   if ( timer_ticks () % TIMER_FREQ == 0 )
   {
-    thread_get_load_avg();
-    thread_foreach(thread_get_recent_cpu, 0);
+    cal_load_avg();
+    thread_foreach(cal_rec_cpu, 0);
   }
 
 }
