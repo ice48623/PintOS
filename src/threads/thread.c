@@ -400,14 +400,25 @@ int
 thread_get_load_avg (void)
 {
   /* Not yet implemented. */
-  size_t ready_threads = list_size(&ready_list) + 1;
-  ready_threads = (int)ready_threads; 
-  ready_threads = CONVERT_TO_FIXED_POINT(ready_threads);
-  load_avg = CONVERT_TO_FIXED_POINT(load_avg);
-  load_avg = MULT( DIVIDE(59,60), load_avg ) + MULT( DIVIDE(1,60), ready_threads );
-  load_avg = CONVERT_TO_INT(load_avg);
+  size_t ready_threads = list_size(&ready_list);
+  
+  if (thread_current() != idle_thread){
+    printf("is not idle thread\n");
+    ready_threads++;
+  }
 
-  return load_avg * 100;
+  printf("ready thread = %d\n", ready_threads);
+  printf("load_avg before = %f\n", load_avg);
+
+  int t1 = MULT_FIX( DIV_FIX(CONVERT_TO_FIX(59),CONVERT_TO_FIX(60)), load_avg);
+  int t2 = MULT_MIX( DIV_FIX(CONVERT_TO_FIX(1),CONVERT_TO_FIX(60)), ready_threads);
+  load_avg = ADD_FIX(t1,t2);
+
+  printf("t1 = %d\n", t1);
+  printf("t2 = %d\n", t2);
+  printf("load_avg after = %f\n", load_avg);
+
+  return ROUND_TO_NEAREST(MULT_MIX(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -415,17 +426,18 @@ int
 thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
-  int nice = thread_current() -> nice_value;
-  int rec_cpu = thread_current() -> recent_cpu;
 
-  // convert to fixed point
-  nice = CONVERT_TO_FIXED_POINT(nice);
-  rec_cpu = CONVERT_TO_FIXED_POINT(rec_cpu);
+  int nice = thread_current() -> nice_value; // int
+  int rec_cpu = thread_current() -> recent_cpu; // real num (fix point)
 
-  rec_cpu = MULT( DIVIDE( MULT(2,load_avg), MULT(2,load_avg) + 1 ), rec_cpu ) + nice;
-  rec_cpu = CONVERT_TO_INT(rec_cpu);
+  int t1 = MULT_MIX(load_avg,2);
+  int t2 = DIV_FIX( t1, ADD_MIX(t1,1));
+
+  rec_cpu = ADD_MIX( MULT_FIX(t2, rec_cpu), nice );
   thread_current() -> recent_cpu = rec_cpu;
-  return rec_cpu * 100;
+
+  return ROUND_TO_NEAREST( MULT_MIX(rec_cpu,100) );
+
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.

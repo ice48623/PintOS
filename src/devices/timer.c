@@ -47,11 +47,6 @@ wakeup_threads(struct thread *t, void *aux)
     thread_unblock(t);
    }
   }
-  // else if(t->tick_to_sleep < 0)
-  // {
-  //   t->tick_to_sleep++;
-  // }
-
  }
 }
 
@@ -119,16 +114,20 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   struct thread *t = thread_current();
-  ASSERT (intr_get_level () == INTR_ON);
-  // while (timer_elapsed (start) < ticks)
-  //   thread_yield ();
-  thread_current()->tick_to_sleep = ticks;
-  enum intr_level old_level = intr_disable();
-  // list_push_front(&sleep_list, &t->allelem);
-  // list_insert(&sleep_list, &t->allelem);
-  thread_block();
+  if (ticks > 0)
+  {
+    ASSERT (intr_get_level () == INTR_ON);
+    // while (timer_elapsed (start) < ticks)
+    //   thread_yield ();
+    thread_current()->tick_to_sleep = ticks;
+    enum intr_level old_level = intr_disable();
+    // list_push_front(&sleep_list, &t->allelem);
+    // list_insert(&sleep_list, &t->allelem);
+    thread_block();
 
-  intr_set_level(old_level);
+    intr_set_level(old_level);
+  }
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -218,21 +217,17 @@ thread_eachsleep (thread_action_func *func, void *aux)
 }
 
 // set priority for each thread
-void set_priority (struct thread *t){
+void set_priority (struct thread *t, void *aux){
    
-  int rec_cpu = t -> recent_cpu;
-  int nice = t -> nice_value;
+  int rec_cpu = t -> recent_cpu; // real
+  int nice = t -> nice_value; // int
 
-  rec_cpu = CONVERT_TO_FIXED_POINT(rec_cpu);
-  nice = CONVERT_TO_FIXED_POINT(nice);
-  
-  int prio = 0;
-  prio = CONVERT_TO_FIXED_POINT(prio);
+  int t1 = DIV_MIX(rec_cpu,4);
+  int t2 = MULT_MIX( CONVERT_TO_FIX(nice), 2);
+  int prio = SUBTRACT_FIX( SUBTRACT_FIX( CONVERT_TO_FIX(PRI_MAX),t1), t2 );
 
-  prio = PRI_MAX - DIVIDE(rec_cpu,4) - MULT(nice,2);
-  prio = CONVERT_TO_INT(prio);
-  
-  t -> priority = prio;
+  t -> priority = ROUND_TO_NEAREST(prio); 
+
 }
 
 /* Timer interrupt handler. */
@@ -243,8 +238,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_tick ();
   thread_foreach(wakeup_threads,0);
 
-  // update recent cpu value for running thread
-  // recalculate priority for each 
+  //update recent cpu value for running thread
+  //recalculate priority for each 
+
   if ( ticks%4 == 0)
   {
     thread_current() -> recent_cpu += 4;
